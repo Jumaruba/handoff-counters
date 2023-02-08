@@ -13,8 +13,8 @@ pub struct Handoff<K>
     vals: HashMap<K, i64>,
     sck: u32,
     dck: u32,
-    slots: HashMap<K, (u32, u32)>,
-    tokens: HashMap<(K, K), ((u32, u32), i64)>,
+    slots: HashMap<K, (u32, u32)>,  /// id -> (sck, dck)
+    tokens: HashMap<(K, K), ((u32, u32), i64)>, /// (i,j) -> ((sck, dck), n)
 }
 
 impl<K> Handoff<K>
@@ -30,7 +30,7 @@ impl<K> Handoff<K>
             vals: HashMap::from([(id.clone(), 0)]),
             sck: 0,
             dck: 0,
-            slots: HashMap::new(),
+            slots: HashMap::new(),  
             tokens: HashMap::new(),
         }
     }
@@ -79,7 +79,45 @@ impl<K> Handoff<K>
         }
     }
 
+    /// Received the token, and now the node must fill the slots. 
+    fn fill_slots(&mut self, h: Handoff<K>) {
+        let total : i64 = 0; 
+        for ((i, j), ((src,dck), n)) in h.tokens.iter() {
+            if j.clone() == self.id && self.find_slot(j, src, dck) {
+                total += n; 
+                self.remove_slot(j, src, dck);
+            }
+        }
+
+        self.increment_self_val(&total);
+    }
+
+    /// UTILS FUNCTIONS ======================================================== 
     
-    
+    /// Checks if a slot exists.
+    fn find_slot(&self, id: &K, src: &u32, dck: &u32) -> bool { 
+        match self.slots.get(id) {
+            Some(v) => {
+                return v.clone() == (src.clone(), dck.clone()); 
+            },
+            None => false
+        }
+    }
+
+    // Remove slot 
+    fn remove_slot(&mut self, id: &K, src: &u32, dck: &u32) -> bool {
+        if self.find_slot(id, src, dck) {
+            self.slots.remove(id);
+            return true;
+        }
+        false 
+    }
+
+    /// Increments the current value in the hashmap. 
+    fn increment_self_val(&self, total: &i64){
+        let curr_val = self.vals.get(&self.id).unwrap().clone();
+        self.vals.insert(self.id.clone(), curr_val + total);
+    }
+
 
 }
