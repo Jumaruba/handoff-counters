@@ -92,6 +92,18 @@ impl<K> Handoff<K>
         self.increment_self_val(&total);
     }
 
+    /// Discards a slot that can never be filled, since sck is higher than the one marked in the slot. 
+    fn discard_slot(&mut self, h: Handoff<K>) {
+        match self.slots.get(&h.id) {
+            Some((src, _)) => {
+                if h.sck > src.clone() {
+                    self.slots.remove(&h.id);
+                }
+            }, 
+            None => return, 
+        }
+    }
+
     /// UTILS FUNCTIONS ======================================================== 
     
     /// Checks if a slot exists.
