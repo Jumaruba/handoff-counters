@@ -4,7 +4,7 @@ use std::hash::Hash;
 
 pub struct Handoff<K>
     where
-        K: Clone + Eq + Hash
+        K: Clone + Eq + Hash + Copy
 {
     id: K,
     tier: u32,
@@ -19,7 +19,7 @@ pub struct Handoff<K>
 
 impl<K> Handoff<K>
     where
-        K: Clone + Eq + Hash
+        K: Clone + Eq + Hash + Copy
 {
     pub fn new(id: &K, tier: u32) -> Self {
         Self {
@@ -46,9 +46,9 @@ impl<K> Handoff<K>
     }
 
     /// This function creates a slot for the handoff that will receive information. 
-    fn create_slot(&mut self, h: Handoff<K>) {
-        if self.tier < h.tier && h.val > 0 && !self.slots.contains_key(&h.id) {
-            self.slots.insert(h.id.clone(), (h.sck, self.dck));
+    fn create_slot(&mut self, h: &Self) {
+        if self.tier < h.tier && h.vals[&h.id] > 0 && !self.slots.contains_key(&h.id) {
+            self.slots.insert(h.id, (h.sck, self.dck));
         }
         self.dck += 1; 
     }
@@ -95,8 +95,8 @@ impl<K> Handoff<K>
     /// Discards a slot that can never be filled, since sck is higher than the one marked in the slot. 
     fn discard_slot(&mut self, h: Handoff<K>) {
         match self.slots.get(&h.id) {
-            Some((src, _)) => {
-                if h.sck > src.clone() {
+            Some(&(src, _)) => {
+                if h.sck > src {
                     self.slots.remove(&h.id);
                 }
             }, 
@@ -104,6 +104,12 @@ impl<K> Handoff<K>
         }
     }
 
+    // Remove a token. 
+    fn discard_tokens(&mut self, h: Handoff<K>) {
+        if h.slots.contains_key(&self.id) && h.sck > self.slots.get(&self.id).unwrap().0 {
+            self.tokens.remove(&(h.id.clone(), self.id.clone())); 
+        }
+    }
 
     /// UTILS FUNCTIONS ======================================================== 
     
