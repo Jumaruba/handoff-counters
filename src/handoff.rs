@@ -9,7 +9,7 @@ where
     id: K,
     tier: u32,
     val: i64,
-    below: u32,
+    below: i64,
     vals: HashMap<K, i64>,
     sck: u32,
     dck: u32,
@@ -93,7 +93,7 @@ where
             // This node is the destination.
             if j == self.id {
                 if let Some(&v) = self.slots.get(&h.id) {
-                    // The slot (src, dck) matches the token (src, dck). 
+                    // The slot (src, dck) matches the token (src, dck).
                     if v == (src, dck) {
                         *val += n;
                         self.slots.remove(&h.id);
@@ -105,7 +105,7 @@ where
 
     /// Discards a slot that can never be filled, since sck is higher than the one marked in the slot.
     fn discard_slot(&mut self, h: Handoff<K>) {
-        if let Some(&(src, _)) =  self.slots.get(&h.id) {
+        if let Some(&(src, _)) = self.slots.get(&h.id) {
             if h.sck > src {
                 self.slots.remove(&h.id);
             }
@@ -119,17 +119,42 @@ where
         }
     }
 
-    fn cache_tokens(&mut self, h: &Self) { 
+    fn cache_tokens(&mut self, h: &Self) {
         if self.tier < h.tier {
             for (&(src, dst), &((sck, dck), n)) in h.tokens.iter() {
                 if src == h.id && dst != self.id {
                     let p = &(src, dst);
-                    let val = if self.tokens.contains_key(p) && sck >= self.tokens[p].0.0 {((sck,dck),n)} else {self.tokens[p]};
+                    let val = if self.tokens.contains_key(p) && sck >= self.tokens[p].0 .0 {
+                        ((sck, dck), n)
+                    } else {
+                        self.tokens[p]
+                    };
                     self.tokens.insert(*p, val);
                 }
             }
         }
     }
 
+    fn aggregate(&mut self, h: &Self) {
+        self.update_below(h);
+        self.update_val(h);
+    }
 
+    fn update_below(&mut self, h: &Self) {
+        if self.tier == h.tier {
+            self.below = max(self.below, h.below);
+        } else if self.tier > h.tier {
+            self.below = max(self.below, h.val);
+        }
+    }
+
+    fn update_val(&mut self, h: &Self) {
+        if self.tier == 0 {
+            self.val = self.vals.values().sum();
+        } else if self.tier == h.tier {
+            self.val = max(max(self.val, h.val), self.below + self.val + h.val);
+        } else {
+            self.val = max(self.val, self.below + self.vals[&self.id]);
+        }
+    }
 }
