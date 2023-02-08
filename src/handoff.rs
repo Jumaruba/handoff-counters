@@ -1,3 +1,4 @@
+use std::cmp::max;
 use std::collections::HashMap;
 use std::hash::Hash;
 
@@ -44,7 +45,39 @@ impl<K> Handoff<K>
         self.vals.insert(self.id.clone(), curr_val);
     }
 
+    /// This function creates a slot for the handoff that will receive information. 
+    fn create_slot(&mut self, h: Handoff<K>) {
+        if self.tier < h.tier && h.val > 0 && !self.slots.contains_key(&h.id) {
+            self.slots.insert(h.id.clone(), (h.sck, self.dck));
+        }
+        self.dck += 1; 
+    }
 
+    /// Merge the val of two tiers. This action can only be implemented by nodes in tier 0 (servers). 
+    fn merge_vectors(&mut self, h: Handoff<K>) {
+        if self.tier != 0 || h.tier != 0  {
+            return; 
+        }
+
+        // Perform the union of both vals.
+        for (id , val) in h.vals.iter() {
+            match self.vals.get(id) {
+                Some(curr_val) => self.vals.insert(id.clone(), max(val.clone(), curr_val.clone())),
+                None => self.vals.insert(id.clone(), val.clone()),
+            };
+        }
+    }
+
+    /// Creates a token to send to a node that has requested it by creating a slot. 
+    fn create_token(&mut self, h: Handoff<K>) {
+        let is_waiting_token : bool = h.slots.contains_key(&self.id);
+        let is_slot_valid: bool = h.slots.get(&self.id).unwrap().0.clone() == self.sck; 
+        if  is_waiting_token &&  is_slot_valid {
+            self.tokens.insert((self.id.clone(), h.id.clone()), (self.slots.get(&self.id).unwrap().clone(), self.vals.get(&self.id).unwrap().clone()));
+            self.vals.insert(self.id.clone(), 0);   // Reset the current value of the node. 
+            self.sck += 1;  
+        }
+    }
 
     
     
