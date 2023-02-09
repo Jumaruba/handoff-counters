@@ -2,6 +2,7 @@ use std::cmp::max;
 use std::collections::HashMap;
 use std::hash::Hash;
 
+#[derive(Debug, Clone)]
 pub struct Handoff<K>
 where
     K: Clone + Eq + Hash + Copy,
@@ -21,15 +22,15 @@ impl<K> Handoff<K>
 where
     K: Clone + Eq + Hash + Copy,
 {
-    pub fn new(id: &K, tier: u32) -> Self {
+    pub fn new(id: K, tier: u32, sck: Option<u32>, dck: Option<u32>) -> Self {
         Self {
             id: id.clone(),
             tier,
             val: 0,
             below: 0,
             vals: HashMap::from([(id.clone(), 0)]),
-            sck: 0,
-            dck: 0,
+            sck: sck.unwrap_or(0),
+            dck: dck.unwrap_or(0),
             slots: HashMap::new(),
             tokens: HashMap::new(),
         }
@@ -41,20 +42,31 @@ where
 
     pub fn inc(&mut self) {
         self.val += 1;
-        let curr_val = self.vals.get(&self.id).unwrap().clone();
-        self.vals.insert(self.id.clone(), curr_val);
+        self.vals.insert(self.id.clone(), self.vals[&self.id] + 1);
+    }
+
+    pub fn merge(&mut self, h: &Self){
+        self.fill_slots(h);     
+        self.discard_slot(h);
+        self.create_slot(h); 
+        self.merge_vectors(h);
+        self.aggregate(h);
+        self.discard_tokens(h);
+        self.create_token(h);
+        self.cache_tokens(h);
+
     }
 
     /// This function creates a slot for the handoff that will receive information.
-    fn create_slot(&mut self, h: &Self) {
+    pub fn create_slot(&mut self, h: &Self) {
         if self.tier < h.tier && h.vals[&h.id] > 0 && !self.slots.contains_key(&h.id) {
             self.slots.insert(h.id, (h.sck, self.dck));
+            self.dck += 1;
         }
-        self.dck += 1;
     }
 
     /// Merge the val of two tiers. This action can only be implemented by nodes in tier 0 (servers).
-    fn merge_vectors(&mut self, h: Handoff<K>) {
+    fn merge_vectors(&mut self, h: &Self) {
         if self.tier != 0 || h.tier != 0 {
             return;
         }
@@ -70,14 +82,14 @@ where
     }
 
     /// Creates a token to send to a node that has requested it by creating a slot.
-    fn create_token(&mut self, h: Handoff<K>) {
+    pub fn create_token(&mut self, h: &Self) {
         let is_waiting_token: bool = h.slots.contains_key(&self.id);
         let is_slot_valid: bool = h.slots.get(&self.id).unwrap().0.clone() == self.sck;
         if is_waiting_token && is_slot_valid {
             self.tokens.insert(
                 (self.id.clone(), h.id.clone()),
                 (
-                    self.slots.get(&self.id).unwrap().clone(),
+                    h.slots.get(&self.id).unwrap().clone(),
                     self.vals.get(&self.id).unwrap().clone(),
                 ),
             );
@@ -87,7 +99,7 @@ where
     }
 
     /// Checked if there are tokens that are able to fill slots.
-    fn fill_slots(&mut self, h: Handoff<K>) {
+    pub fn fill_slots(&mut self, h: &Self) {
         let val = self.vals.get_mut(&self.id).unwrap();
         for (&(_, j), &((src, dck), n)) in h.tokens.iter() {
             // This node is the destination.
@@ -104,7 +116,7 @@ where
     }
 
     /// Discards a slot that can never be filled, since sck is higher than the one marked in the slot.
-    fn discard_slot(&mut self, h: Handoff<K>) {
+    fn discard_slot(&mut self, h: &Self) {
         if let Some(&(src, _)) = self.slots.get(&h.id) {
             if h.sck > src {
                 self.slots.remove(&h.id);
@@ -112,11 +124,16 @@ where
         }
     }
 
-    // Remove a token.
-    fn discard_tokens(&mut self, h: &Self) {
-        if h.slots.contains_key(&self.id) && h.sck > self.slots[&self.id].0 {
-            self.tokens.remove(&(h.id, self.id));
-        }
+    // Remove tokens out of date.
+    // Code from https://github.com/pssalmeida/handoff_counter-rs/blob/master/src/handoff_counter.rs 
+    pub fn discard_tokens(&mut self, h: &Self) {
+        let token: HashMap<(K,K), ((u32,u32), i64)> = self.tokens.drain().filter(|&((src, dst), ((_, dck), _))| {
+            !(dst == h.id && match h.slots.get(&src) {
+                Some(&(_, d)) =>  d > dck, 
+                None => h.dck > dck
+            })
+        }).collect();
+        self.tokens = token;
     }
 
     fn cache_tokens(&mut self, h: &Self) {
@@ -157,4 +174,26 @@ where
             self.val = max(self.val, self.below + self.vals[&self.id]);
         }
     }
+
+    // UTILS FUNCTIONS
+    pub fn get_sck(&self) -> u32 {
+        self.sck.clone()
+    }
+
+    pub fn get_dck(&self) -> u32 {
+        self.dck.clone()
+    }
+
+    pub fn get_slots(&self) -> HashMap<K, (u32, u32)> {
+        self.slots.clone()
+    }
+
+    pub fn get_tokens(&self) -> HashMap<(K,K), ((u32,u32), i64)> {
+        self.tokens.clone()
+    }
+
+    pub fn get_self_vals(&self) -> i64 {
+        self.vals[&self.id]
+    }
+
 }
