@@ -16,7 +16,7 @@ fn setup() -> (Handoff<char>, Handoff<char>) {
 }
 
 #[test]
-fn create_slot() {
+fn step1() {
     let (ni, mut nj) = setup();
 
     // When
@@ -29,7 +29,7 @@ fn create_slot() {
 }
 
 #[test]
-fn create_token(){
+fn step2(){
     let (mut ni, mut nj) = setup();
 
     // When
@@ -43,7 +43,7 @@ fn create_token(){
 }
 
 #[test]
-fn fill_slots(){
+fn step3(){
     let (mut ni, mut nj) = setup();
 
     //When 
@@ -57,7 +57,7 @@ fn fill_slots(){
 }
 
 #[test]
-fn discard_tokens(){
+fn step4(){
     let (mut ni, mut nj) = setup();
 
     //When 
