@@ -4,87 +4,34 @@
 This is yet another implementation for the Handoff Counters presented in the paper [Scalable Eventually Consistent Counters over Unreliable Networks](https://arxiv.org/abs/1307.3207). 
 The official implementation can be found in [this](https://github.com/pssalmeida/handoff_counter-rs) repository. 
 
-## Example 
+## Example 1
 
 Consider the following example, where `node i` sends its information to a `node j` in a lower tier. 
 
-![](./figures/paper_example.png)
+<div align="center">
+    <img src="./figures/paper_example.png" style="max-width: 70%" >
+</div>
 
+## Example 2 
+The [second example](./tests/merge.rs) tests the `merge` of states. The calls the following functions in sequence:
 
-The following code shows the main operations performed in this example, separated in steps.
+- fillslots
+- discardslot
+- createslot
+- mergevectorrs
+- aggregate
+- discardtokens
+- createtoken
+- cachetoken
 
-```rust
-use std::collections::HashMap;
-use HandoffCounter::Handoff;
+Function `test1` exercises an interaction between **node i** at **tier 1** and **node j** at **tier 0**: 
 
-fn setup() -> (Handoff<char>, Handoff<char>) {
-    let mut ni: Handoff<char> = Handoff::new('A', 1, Some(2), Some(0));
-    let mut nj: Handoff<char> = Handoff::new('B', 0, Some(0), Some(5));
+<div align="center">
+    <img src="./figures/merge_test1.png">
+</div>
 
-    for _ in 0..9 {
-        ni.inc();
-    }
+Function `test2` follows an interaction between a **node k** in **tier 2**, which send its state to **node i** in tier 1. This is a subsequence of the `test1`, thus **node i** starts with the output state of `test1` function. 
 
-    for _ in 0..1021 {
-        nj.inc();
-    }
-    return (ni, nj);
-}
-
-#[test]
-fn step1() {
-    let (ni, mut nj) = setup();
-
-    // When
-    nj.create_slot(&ni);
-    let slots = nj.get_slots();
-
-    // Then
-    assert_eq!(HashMap::from([('A', (2, 5))]), slots);
-    assert_eq!(6, nj.get_dck());    // Increment destination clock
-}
-
-#[test]
-fn step2(){
-    let (mut ni, mut nj) = setup();
-
-    // When
-    nj.create_slot(&ni);
-    ni.create_token(&nj);
-
-    //Then 
-    assert_eq!(HashMap::from([(('A','B'), ((2,5),9))]), ni.get_tokens());   // Create token
-    assert_eq!(3, ni.get_sck()); // Increment source clock
-    assert_eq!(0, ni.get_self_vals());
-}
-
-#[test]
-fn step3(){
-    let (mut ni, mut nj) = setup();
-
-    //When 
-    nj.create_slot(&ni);
-    ni.create_token(&nj);
-    nj.fill_slots(&ni);
-
-    //Then 
-    assert_eq!(HashMap::new(), nj.get_slots()); // Empty slots
-    assert_eq!(1030, nj.get_self_vals());       // Increments current vals[j]. 
-}
-
-#[test]
-fn step4(){
-    let (mut ni, mut nj) = setup();
-
-    //When 
-    nj.create_slot(&ni);
-    ni.create_token(&nj);
-    nj.fill_slots(&ni);
-    ni.discard_tokens(&nj);
-
-    //Then
-    assert_eq!(HashMap::new(), ni.get_tokens());  
-}
-
-```
-
+<div align="center">
+    <img src="./figures/merge_test2.png">
+</div>
