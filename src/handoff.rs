@@ -9,8 +9,8 @@ where
 {
     id: K,
     tier: u32,
-    val: i64,
-    below: i64,
+    pub val: i64,
+    pub below: i64,
     vals: HashMap<K, i64>,
     sck: u32,
     dck: u32,
@@ -54,7 +54,6 @@ where
         self.discard_tokens(h);
         self.create_token(h);
         self.cache_tokens(h);
-
     }
 
     /// This function creates a slot for the handoff that will receive information.
@@ -84,8 +83,7 @@ where
     /// Creates a token to send to a node that has requested it by creating a slot.
     pub fn create_token(&mut self, h: &Self) {
         let is_waiting_token: bool = h.slots.contains_key(&self.id);
-        let is_slot_valid: bool = h.slots.get(&self.id).unwrap().0.clone() == self.sck;
-        if is_waiting_token && is_slot_valid {
+        if is_waiting_token && h.slots[&self.id].0 == self.sck {
             self.tokens.insert(
                 (self.id.clone(), h.id.clone()),
                 (
@@ -141,7 +139,7 @@ where
             for (&(src, dst), &((sck, dck), n)) in h.tokens.iter() {
                 if src == h.id && dst != self.id {
                     let p = &(src, dst);
-                    let val = if self.tokens.contains_key(p) && sck >= self.tokens[p].0 .0 {
+                    let val = if self.tokens.contains_key(p) && sck >= self.tokens[p].0.0 {
                         ((sck, dck), n)
                     } else {
                         self.tokens[p]
@@ -169,7 +167,7 @@ where
         if self.tier == 0 {
             self.val = self.vals.values().sum();
         } else if self.tier == h.tier {
-            self.val = max(max(self.val, h.val), self.below + self.val + h.val);
+            self.val = max(max(self.val, h.val), self.below + self.vals[&self.id] + h.vals[&h.id]);
         } else {
             self.val = max(self.val, self.below + self.vals[&self.id]);
         }
